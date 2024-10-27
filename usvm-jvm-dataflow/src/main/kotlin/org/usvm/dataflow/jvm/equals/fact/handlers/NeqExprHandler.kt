@@ -7,6 +7,7 @@ import org.usvm.dataflow.jvm.equals.fact.EqualsCtx
 import org.usvm.dataflow.jvm.equals.fact.Fact
 import org.usvm.dataflow.jvm.equals.fact.Fact.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.*
+import org.usvm.dataflow.jvm.equals.fact.utils.negotiate
 import org.usvm.dataflow.jvm.equals.fact.utils.toFact
 
 class NeqExprHandler : InstructionHandler {
@@ -28,7 +29,11 @@ class NeqExprHandler : InstructionHandler {
         // TODO: support connectives such && can also be used.
 
         // TODO: there can be reassignment with casts.
-        if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
+        if (rhvFact is True) {
+            return lhvFact.negotiate()
+        } else if (rhvFact is False) {
+            return lhvFact
+        } else if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
             lhvFact is ThisOrOther.Other && rhvFact is ThisOrOther.This
         ) {
             return NotEquals.NotEqualsObj

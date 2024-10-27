@@ -1,3 +1,5 @@
+package equals
+
 class Team(val name: String, val members: List<String>) {
 
     override fun equals(other: Any?): Boolean {

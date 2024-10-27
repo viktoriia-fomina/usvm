@@ -8,6 +8,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact
 import org.usvm.dataflow.jvm.equals.fact.Fact.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.Equals.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.IsNull
+import org.usvm.dataflow.jvm.equals.fact.utils.negotiate
 import org.usvm.dataflow.jvm.equals.fact.utils.toFact
 
 
@@ -31,7 +32,11 @@ class EqExprHandler : InstructionHandler {
         }
 
         // TODO: there can be reassignment with casts etc.
-        if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
+        if (rhvFact is True) {
+            return lhvFact
+        } else if (rhvFact is False) {
+            return lhvFact.negotiate()
+        } else if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
             lhvFact is ThisOrOther.Other && rhvFact is ThisOrOther.This
         ) {
             return EqualsObj
