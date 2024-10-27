@@ -19,6 +19,13 @@ class EqualsProcessor {
     //   2. Process cases when trying to use location that has not been calculated so far.
     //   3. Refactor EqExprHandler/NeqExprHandler.
     //   4. Process cases when different values can be stored to the same location, but in different paths.
+    //     if (this != obj)
+    //     goto JcInstRef(index=4)
+    //     %1 = 1
+    //     goto JcInstRef(index=6)
+    //     %1 = 0
+    //     goto JcInstRef(index=6)
+    //     return %1
     //   5. Use persistent map for path constraints.
     //   6. Add logging.
     companion object {
@@ -99,12 +106,12 @@ class EqualsProcessor {
             pathConstraints: MutableMap<JcInst, List<Fact>>,
         ) {
             if (vertex is JcAssignInst) {
-                handleAssignInst(vertex, ctx)
+                processAssignInst(vertex, ctx)
             }
 
             val successors = appGraph.successors(vertex)
             if (vertex is JcIfInst) {
-                handleIfInst(appGraph, ctx, vertex, pathConstraints)
+                processIfInst(appGraph, ctx, vertex, pathConstraints)
             } else {
                 val vertexConstraints = pathConstraints[vertex]
                     ?.toMutableList()
@@ -115,7 +122,7 @@ class EqualsProcessor {
             stack.addAll(successors)
         }
 
-        private fun handleIfInst(
+        private fun processIfInst(
             appGraph: JcApplicationGraph,
             ctx: EqualsCtx,
             vertex: JcIfInst,
@@ -128,7 +135,6 @@ class EqualsProcessor {
                 ?: mutableListOf()
             val newConstraint = getIfCondition(vertex, ctx)
             // TODO: do we always have two of them?
-            // TODO: I need all instructions list here to extract instruction.
             successors
                 .find { it == method.instList[vertex.trueBranch.index] }
                 ?.let { pathConstraints[it] = vertexConstraints + newConstraint }
@@ -138,7 +144,7 @@ class EqualsProcessor {
                 ?.let { pathConstraints[it] = vertexConstraints + newConstraint.negotiate() }
         }
 
-        private fun handleAssignInst(
+        private fun processAssignInst(
             vertex: JcAssignInst,
             ctx: EqualsCtx
         ) {

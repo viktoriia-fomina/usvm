@@ -27,8 +27,9 @@ sealed class Fact {
 
         data class IsNotNull(val instance: ThisOrOther) : Predicate()
 
-        // TODO: may be it should be IsCls(instance)?
         data object IsThisCls : Predicate()
+
+        data object IsNotThisClass : Predicate()
 
         sealed class Equals : Predicate() {
             /**
@@ -74,5 +75,3 @@ sealed class Fact {
 
     data class Or(val facts: List<Fact>) : Fact()
 }
-
-// TODO: constraints and connectives.

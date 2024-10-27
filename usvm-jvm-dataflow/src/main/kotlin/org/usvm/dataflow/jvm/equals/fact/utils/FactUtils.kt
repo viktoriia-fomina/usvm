@@ -1,9 +1,6 @@
 package org.usvm.dataflow.jvm.equals.fact.utils
 
-import org.jacodb.api.jvm.cfg.JcArgument
-import org.jacodb.api.jvm.cfg.JcNullConstant
-import org.jacodb.api.jvm.cfg.JcThis
-import org.jacodb.api.jvm.cfg.JcValue
+import org.jacodb.api.jvm.cfg.*
 import org.usvm.dataflow.jvm.equals.fact.Fact
 import org.usvm.dataflow.jvm.equals.fact.Fact.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.*
@@ -18,6 +15,8 @@ fun Fact.negotiate(): Fact = when (this) {
     is Or -> And(facts.map { it.negotiate() })
     is IsNull -> IsNotNull(this.instance)
     is IsNotNull -> IsNull(this.instance)
+    is IsThisCls -> IsNotThisClass
+    is IsNotThisClass -> IsThisCls
     is Equals.EqualsObj -> NotEquals.NotEqualsObj
     is NotEquals.NotEqualsObj -> Equals.EqualsObj
     is Equals.EqualsCls -> NotEquals.NotEqualsCls
@@ -35,10 +34,10 @@ fun Fact.negotiate(): Fact = when (this) {
  * Note! This all is used in context of `equals` method, e.g., `JcArgument` is converted to `Fact.ThisOrOther.Other`.
  */
 fun JcValue.toFact() = when (this) {
-    is JcNullConstant -> Null
     is JcThis -> ThisOrOther.This
     is JcArgument -> ThisOrOther.Other
-    // TODO: process True/False facts.
+    is JcNullConstant -> Null
+    is JcBool -> if (this.value) True else False
     else -> Top
 }
 
@@ -54,6 +53,8 @@ fun Fact.isStructural(): Boolean {
         // TODO: not sure about this NotEquals below.
         is IsNull -> true
         is IsNotNull -> true
+        is IsThisCls -> true
+        is IsNotThisClass -> true
         is NotEquals.NotEqualsField -> true
         is NotEquals.NotEqualsCls -> true
         is NotEquals.NotEqualsObj -> true
