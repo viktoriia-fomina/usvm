@@ -16,17 +16,9 @@ class EqualsProcessor {
     //   1. Refactor EqualsProcessor.
     //   2. Process cases when trying to use location that has not been calculated so far (is it possible???).
     //   3. Refactor EqExprHandler/NeqExprHandler.
-    //   4. Process cases when different values can be stored to the same location, but in different paths.
-    //     if (this != obj)
-    //     goto JcInstRef(index=4)
-    //     %1 = 1
-    //     goto JcInstRef(index=6)
-    //     %1 = 0
-    //     goto JcInstRef(index=6)
-    //     return %1
-    //   5. Use persistent map for path constraints.
-    //   6. Add logging.
-    //   7. Fix case when to the same location can be added different values within a single function:
+    //   4. Use persistent map for path constraints.
+    //   5. Add logging.
+    //   6. Fix case when to the same location can be added different values within a single function:
     //   if-else block, { } - any different scope (?).
     companion object {
         /**
@@ -112,14 +104,11 @@ class EqualsProcessor {
             if (vertex is JcAssignInst) {
                 processAssignInst(vertex, vertexConstraints, ctx)
             }
-            // TODO: predecessors should be considered. We should take constraints from predecessors.
-            // TODO: when can we have 2 predecessors:
-            //  1. if, for, try/catch?
+
             val successors = appGraph.successors(vertex)
             if (vertex is JcIfInst) {
                 processIfInst(appGraph, ctx, vertex, visited, pathConstraints)
             } else {
-                // TODO: NOW WE CAN REWRITE PATH CONSTRAINTS, WORKS WRONG FOR THE CASE WITH SOME PREDECESSORS.
                 successors.forEach { succ ->
                     vertexConstraints?.let { pathConstraints.add(succ, it) }
                 }
@@ -177,7 +166,7 @@ class EqualsProcessor {
         ): Predicate = when (val cond = vertex.condition) {
             is JcEqExpr, is JcNeqExpr -> {
                 val handler = handlers[cond::class.java]
-                // TODO: log case when non predicate is returned.
+                // TODO: log case when non predicate is returned!!!
                 handler?.handle(cond, ctx, vertexConstraints) as? Predicate ?: Predicate.Top
             }
 
