@@ -7,7 +7,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.*
 
 class FieldRefHandler : InstructionHandler {
     // TODO: check somewhere whether correct one expr is passed.
-    override fun handle(expr: JcExpr, ctx: EqualsCtx): Fact {
+    override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
         val fieldRef = expr as JcFieldRef
         val field = fieldRef.field
 
@@ -16,7 +16,7 @@ class FieldRefHandler : InstructionHandler {
             is JcThis -> ThisOrOther.This
             is JcArgument -> ThisOrOther.Other
             // TODO: does JcLocal var always mean there is sth starting from %?
-            is JcLocalVar -> ctx.locationToFact[instance.name] ?: Top
+            is JcLocalVar -> ctx.locationToFact.getFact(instance.name, pathConstraintsInCurrentPoint) ?: Top
             else -> Top
         }
         // TODO: don't do such not really safe casting.

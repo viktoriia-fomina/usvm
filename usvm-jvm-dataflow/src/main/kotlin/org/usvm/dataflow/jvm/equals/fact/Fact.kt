@@ -1,5 +1,7 @@
 package org.usvm.dataflow.jvm.equals.fact
 
+import org.usvm.dataflow.jvm.equals.fact.Fact.*
+
 sealed class Fact {
     data object Top : Fact()
 
@@ -11,10 +13,6 @@ sealed class Fact {
 
     data object Null : Fact()
 
-    data object True : Fact()
-
-    data object False : Fact()
-
     data class Field(val instance: ThisOrOther, val name: String) : Fact()
 
     /**
@@ -23,6 +21,13 @@ sealed class Fact {
     data class Cls(val instance: ThisOrOther) : Fact()
 
     sealed class Predicate : Fact() {
+        // TODO: think that Top can be misused with another Top.
+        data object Top : Predicate()
+
+        data object True : Predicate()
+
+        data object False : Predicate()
+
         data class IsNull(val instance: ThisOrOther) : Predicate()
 
         data class IsNotNull(val instance: ThisOrOther) : Predicate()
@@ -30,6 +35,11 @@ sealed class Fact {
         data object IsThisCls : Predicate()
 
         data object IsNotThisClass : Predicate()
+
+        // TODO: check list size > 1.
+        data class And(val predicates: List<Predicate>) : Predicate()
+
+        data class Or(val predicates: List<Predicate>) : Predicate()
 
         sealed class Equals : Predicate() {
             /**
@@ -65,13 +75,23 @@ sealed class Fact {
             data object NotEqualsCls : NotEquals()
         }
     }
-
-    data class AndBinary(val fact1: Fact, val fact2: Fact) : Fact()
-
-    // TODO: check list size > 1.
-    data class And(val facts: List<Fact>) : Fact()
-
-    data class OrBinary(val fact1: Fact, val fact2: Fact) : Fact()
-
-    data class Or(val facts: List<Fact>) : Fact()
 }
+
+// TODO: make connectives structure better.
+
+// TODO: not any fact can be connected with connectives.
+infix fun Predicate?.or(p: Predicate): Predicate = when {
+    this == null -> p
+    this is Predicate.Or -> Predicate.Or(this.predicates + listOf(p))
+    p is Predicate.Or -> Predicate.Or(listOf(this) + p.predicates)
+    else -> Predicate.Or(listOf(this, p))
+}
+
+infix fun Predicate?.and(p: Predicate): Predicate = when {
+    this == null -> p
+    this is Predicate.And -> Predicate.And(this.predicates + listOf(p))
+    p is Predicate.And -> Predicate.And(listOf(this) + p.predicates)
+    else -> Predicate.And(listOf(this, p))
+}
+
+// TODO: create some function like simplify, e.g., something like TOP or TOP can be simplified to TOP.

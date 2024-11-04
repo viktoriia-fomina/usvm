@@ -9,7 +9,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact
 import org.usvm.dataflow.jvm.equals.fact.Fact.*
 
 class VirtualCallExprHandler : InstructionHandler {
-    override fun handle(expr: JcExpr, ctx: EqualsCtx): Fact {
+    override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
         val virtualCallExpr = expr as JcVirtualCallExpr
         if (virtualCallExpr.args.isNotEmpty() ||
             virtualCallExpr.method.name != "getClass" ||

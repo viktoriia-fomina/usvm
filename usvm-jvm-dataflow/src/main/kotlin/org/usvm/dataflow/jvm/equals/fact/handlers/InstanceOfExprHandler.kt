@@ -8,7 +8,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate
 import org.usvm.dataflow.jvm.equals.fact.Fact.Top
 
 class InstanceOfExprHandler : InstructionHandler {
-    override fun handle(expr: JcExpr, ctx: EqualsCtx): Fact {
+    override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
         val instanceOfExpr = expr as JcInstanceOfExpr
 
         return if (instanceOfExpr.targetType.typeName == ctx.thisTypeName) {

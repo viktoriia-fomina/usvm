@@ -4,15 +4,13 @@ import org.jacodb.api.jvm.cfg.*
 import org.usvm.dataflow.jvm.equals.fact.Fact
 import org.usvm.dataflow.jvm.equals.fact.Fact.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.*
+import org.usvm.dataflow.jvm.equals.fact.and
+import org.usvm.dataflow.jvm.equals.fact.or
 
-/**
- * When negotiation has no sense, e.g., for `Fact.Field`, then `Fact.Top` is returned.
- */
-fun Fact.negotiate(): Fact = when (this) {
-    is AndBinary -> OrBinary(this.fact1.negotiate(), this.fact2.negotiate())
-    is OrBinary -> AndBinary(this.fact1.negotiate(), this.fact2.negotiate())
-    is And -> Or(facts.map { it.negotiate() })
-    is Or -> And(facts.map { it.negotiate() })
+fun Predicate.negotiate(): Predicate = when (this) {
+    is Predicate.Top -> Predicate.Top
+    is And -> predicates.reduce { acc, f -> acc or f.negotiate() }
+    is Or -> predicates.reduce { acc, f -> acc and f.negotiate() }
     is IsNull -> IsNotNull(this.instance)
     is IsNotNull -> IsNull(this.instance)
     is IsThisCls -> IsNotThisClass
@@ -20,11 +18,11 @@ fun Fact.negotiate(): Fact = when (this) {
     is Equals.EqualsObj -> NotEquals.NotEqualsObj
     is NotEquals.NotEqualsObj -> Equals.EqualsObj
     is Equals.EqualsCls -> NotEquals.NotEqualsCls
+    is NotEquals.NotEqualsCls -> Equals.EqualsCls
     is Equals.EqualsField -> NotEquals.NotEqualsField(this.name)
     is NotEquals.NotEqualsField -> Equals.EqualsField(this.name)
     is True -> False
     is False -> True
-    else -> Top
 }
 
 // TODO: in some cases we can process, we still return Fact.Top.
@@ -38,15 +36,13 @@ fun JcValue.toFact() = when (this) {
     is JcArgument -> ThisOrOther.Other
     is JcNullConstant -> Null
     is JcBool -> if (this.value) True else False
-    else -> Top
+    else -> Fact.Top
 }
 
 fun Fact.isStructural(): Boolean {
     return when (this) {
-        is OrBinary -> this.fact1.isStructural() && this.fact2.isStructural()
-        is AndBinary -> this.fact1.isStructural() && this.fact2.isStructural()
-        is And -> this.facts.all { it.isStructural() }
-        is Or -> this.facts.all { it.isStructural() }
+        is And -> this.predicates.all { it.isStructural() }
+        is Or -> this.predicates.all { it.isStructural() }
         is Equals.EqualsField -> true
         Equals.EqualsCls -> true
         Equals.EqualsObj -> true

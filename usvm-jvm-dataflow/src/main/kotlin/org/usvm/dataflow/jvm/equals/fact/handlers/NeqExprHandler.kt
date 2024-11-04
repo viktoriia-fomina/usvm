@@ -11,18 +11,18 @@ import org.usvm.dataflow.jvm.equals.fact.utils.negotiate
 import org.usvm.dataflow.jvm.equals.fact.utils.toFact
 
 class NeqExprHandler : InstructionHandler {
-    override fun handle(expr: JcExpr, ctx: EqualsCtx): Fact {
+    override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
         val neqExpr = expr as JcNeqExpr
         val lhv = neqExpr.lhv
         val rhv = neqExpr.rhv
 
         val lhvFact = if (lhv is JcLocalVar) {
-            ctx.locationToFact[lhv.name] ?: Top
+            ctx.locationToFact.getFact(lhv.name, pathConstraintsInCurrentPoint) ?: Fact.Top
         } else {
             lhv.toFact()
         }
         val rhvFact = if (rhv is JcLocalVar) {
-            ctx.locationToFact[rhv.name] ?: Top
+            ctx.locationToFact.getFact(rhv.name, pathConstraintsInCurrentPoint) ?: Predicate.Top
         } else {
             rhv.toFact()
         }
@@ -30,7 +30,7 @@ class NeqExprHandler : InstructionHandler {
 
         // TODO: there can be reassignment with casts.
         if (rhvFact is True) {
-            return lhvFact.negotiate()
+            return (lhvFact as Predicate).negotiate()
         } else if (rhvFact is False) {
             return lhvFact
         } else if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
@@ -58,6 +58,6 @@ class NeqExprHandler : InstructionHandler {
             return Equals.EqualsField(lhvFact.name)
         }
 
-        return Top
+        return Predicate.Top
     }
 }
