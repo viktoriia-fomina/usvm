@@ -11,31 +11,29 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.IsNull
 import org.usvm.dataflow.jvm.equals.fact.utils.negotiate
 import org.usvm.dataflow.jvm.equals.fact.utils.toFact
 
-
 // TODO: mostly copy-pasted from NeqExprHandler so get rid of copy pasting.
 class EqExprHandler : InstructionHandler {
-    override fun handle(expr: JcExpr, ctx: EqualsCtx): Fact {
+    override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
         val eqExpr = expr as JcEqExpr
         val lhv = eqExpr.lhv
         val rhv = eqExpr.rhv
 
         // TODO: it does not look beautiful.
         val lhvFact = if (lhv is JcLocalVar) {
-            ctx.locationToFact[lhv.name] ?: Top
+            ctx.locationToFact.getFact(lhv.name, pathConstraintsInCurrentPoint) ?: Top
         } else {
             lhv.toFact()
         }
         val rhvFact = if (rhv is JcLocalVar) {
-            ctx.locationToFact[rhv.name] ?: Top
+            ctx.locationToFact.getFact(rhv.name, pathConstraintsInCurrentPoint) ?: Top
         } else {
             rhv.toFact()
         }
 
-        // TODO: there can be reassignment with casts etc.
-        if (rhvFact is True) {
+        if (rhvFact is Predicate.True) {
             return lhvFact
-        } else if (rhvFact is False) {
-            return lhvFact.negotiate()
+        } else if (rhvFact is Predicate.False) {
+            return (lhvFact as Predicate).negotiate()
         } else if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
             lhvFact is ThisOrOther.Other && rhvFact is ThisOrOther.This
         ) {
@@ -61,6 +59,6 @@ class EqExprHandler : InstructionHandler {
             return EqualsField(lhvFact.name)
         }
 
-        return Top
+        return Predicate.Top
     }
 }

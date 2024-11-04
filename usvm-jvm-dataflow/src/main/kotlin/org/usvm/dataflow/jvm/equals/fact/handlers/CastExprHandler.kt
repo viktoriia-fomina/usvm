@@ -10,14 +10,14 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.ThisOrOther
 import org.usvm.dataflow.jvm.equals.fact.Fact.Top
 
 class CastExprHandler : InstructionHandler {
-    override fun handle(expr: JcExpr, ctx: EqualsCtx): Fact {
+    override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
         val castExpr = expr as JcCastExpr
         val operand = castExpr.operand
 
         // TODO: what if non local var, but concrete value? I should process it.
         if (operand is JcLocalVar) {
             // TODO: log case when local var is null.
-            return ctx.locationToFact[operand.name] ?: Top
+            return ctx.locationToFact.getFact(operand.name, pathConstraintsInCurrentPoint) ?: Top
         }
 
         if (operand !is JcArgument) {

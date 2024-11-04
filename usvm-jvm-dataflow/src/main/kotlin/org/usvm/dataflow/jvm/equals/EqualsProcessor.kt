@@ -4,9 +4,7 @@ import org.jacodb.api.jvm.JcClasspath
 import org.jacodb.api.jvm.JcMethod
 import org.jacodb.api.jvm.analysis.JcApplicationGraph
 import org.jacodb.api.jvm.cfg.*
-import org.usvm.dataflow.jvm.equals.fact.CollectFactsResult
-import org.usvm.dataflow.jvm.equals.fact.EqualsCtx
-import org.usvm.dataflow.jvm.equals.fact.Fact
+import org.usvm.dataflow.jvm.equals.fact.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.*
 import org.usvm.dataflow.jvm.equals.fact.handlers.*
 import org.usvm.dataflow.jvm.equals.fact.utils.isStructural
@@ -16,7 +14,7 @@ import org.usvm.dataflow.jvm.util.thisInstance
 class EqualsProcessor {
     // TODO:
     //   1. Refactor EqualsProcessor.
-    //   2. Process cases when trying to use location that has not been calculated so far.
+    //   2. Process cases when trying to use location that has not been calculated so far (is it possible???).
     //   3. Refactor EqExprHandler/NeqExprHandler.
     //   4. Process cases when different values can be stored to the same location, but in different paths.
     //     if (this != obj)
@@ -28,6 +26,8 @@ class EqualsProcessor {
     //     return %1
     //   5. Use persistent map for path constraints.
     //   6. Add logging.
+    //   7. Fix case when to the same location can be added different values within a single function:
+    //   if-else block, { } - any different scope (?).
     companion object {
         /**
          * @return true when considers `equals` as structural;
@@ -35,29 +35,29 @@ class EqualsProcessor {
          */
         fun isEqualsStructural(cp: JcClasspath, equalsMethod: JcMethod): Boolean {
             val equalsMethodInsts = equalsMethod.instList
-            val (locationToFact, returnToPathConstraints) = collectFacts(cp, equalsMethod)
+            val (locationToFact, returnToPathConstraints) = collectFacts(cp, equalsMethod) // TODO: process empty map
             println(locationToFact)
 
             val returnInsts = equalsMethodInsts.filterIsInstance<JcReturnInst>()
             val res = returnInsts.all { returnInst ->
                 val returnValue = returnInst.returnValue
-                val pathConstraints = returnToPathConstraints[returnInst]
-                val pathConstraintFact = pathConstraints?.let { And(it) }
+                val pathConstraints = returnToPathConstraints.get(returnInst)
 
                 when (returnValue) {
                     is JcLocalVar -> {
-                        val fact = locationToFact[returnValue.name]
+                        val fact = locationToFact.getFact(returnValue.name, pathConstraints)
                         // TODO: log it, error case when fact == null.
-                        fact != null && fact != Top && fact.isStructural() && pathConstraintFact?.isStructural() != false
+                        fact != null && fact != Top && fact.isStructural() && pathConstraints?.isStructural() != false
                     }
-                    null -> pathConstraintFact?.isStructural() != false
+
+                    null -> pathConstraints?.isStructural() != false
                     else -> {
-                        when(returnValue) {
+                        when (returnValue) {
                             is JcInt -> when (returnValue.value) {
-                                    0 -> pathConstraintFact?.negotiate()?.isStructural() != false
-                                    1 -> pathConstraintFact?.isStructural() != false
-                                    else -> false
-                                }
+                                0 -> pathConstraints?.negotiate()?.isStructural() != false
+                                1 -> pathConstraints?.isStructural() != false
+                                else -> false
+                            }
 
                             else -> false
                         }
@@ -77,20 +77,21 @@ class EqualsProcessor {
             appGraph: JcApplicationGraph,
             method: JcMethod
         ): CollectFactsResult {
-            val firstInst = method.instList.first()
-            val ctx = EqualsCtx(method.thisInstance.typeName, mutableMapOf())
+            val firstInst = method.instList.firstOrNull()
+                ?: return CollectFactsResult(LocationToFact(), PathConstraints())
+            val ctx = EqualsCtx(method.thisInstance.typeName, LocationToFact())
 
-            val stack = mutableListOf(firstInst)
+            val stack = ArrayDeque<JcInst>().apply { add(firstInst) }
             val visited = mutableSetOf<JcInst>()
             // TODO: delete sub-branches we have already analyzed.
-            val pathConstraints = mutableMapOf<JcInst, List<Fact>>()
+            val pathConstraints = PathConstraints()
 
             while (stack.isNotEmpty()) {
                 val vertex = stack.removeLast()
 
                 if (vertex !in visited) {
                     visited.add(vertex)
-                    processVertex(appGraph, ctx, vertex, stack, pathConstraints)
+                    processVertex(appGraph, ctx, vertex, stack, visited, pathConstraints)
                 }
             }
 
@@ -103,20 +104,25 @@ class EqualsProcessor {
             ctx: EqualsCtx,
             vertex: JcInst,
             stack: MutableList<JcInst>,
-            pathConstraints: MutableMap<JcInst, List<Fact>>,
+            visited: MutableSet<JcInst>,
+            pathConstraints: PathConstraints,
         ) {
-            if (vertex is JcAssignInst) {
-                processAssignInst(vertex, ctx)
-            }
+            val vertexConstraints = pathConstraints.get(vertex)
 
+            if (vertex is JcAssignInst) {
+                processAssignInst(vertex, vertexConstraints, ctx)
+            }
+            // TODO: predecessors should be considered. We should take constraints from predecessors.
+            // TODO: when can we have 2 predecessors:
+            //  1. if, for, try/catch?
             val successors = appGraph.successors(vertex)
             if (vertex is JcIfInst) {
-                processIfInst(appGraph, ctx, vertex, pathConstraints)
+                processIfInst(appGraph, ctx, vertex, visited, pathConstraints)
             } else {
-                val vertexConstraints = pathConstraints[vertex]
-                    ?.toMutableList()
-                    ?: mutableListOf()
-                successors.forEach { pathConstraints[it] = vertexConstraints }
+                // TODO: NOW WE CAN REWRITE PATH CONSTRAINTS, WORKS WRONG FOR THE CASE WITH SOME PREDECESSORS.
+                successors.forEach { succ ->
+                    vertexConstraints?.let { pathConstraints.add(succ, it) }
+                }
             }
 
             stack.addAll(successors)
@@ -126,45 +132,56 @@ class EqualsProcessor {
             appGraph: JcApplicationGraph,
             ctx: EqualsCtx,
             vertex: JcIfInst,
-            pathConstraints: MutableMap<JcInst, List<Fact>>
+            visited: MutableSet<JcInst>,
+            pathConstraints: PathConstraints
         ) {
             val method = appGraph.methodOf(vertex)
             val successors = appGraph.successors(vertex)
-            val vertexConstraints = pathConstraints[vertex]
-                ?.toMutableList()
-                ?: mutableListOf()
-            val newConstraint = getIfCondition(vertex, ctx)
+            val vertexConstraints = pathConstraints.get(vertex)
+            val newConstraint = getIfCondition(vertex, ctx, vertexConstraints)
             // TODO: do we always have two of them?
-            successors
-                .find { it == method.instList[vertex.trueBranch.index] }
-                ?.let { pathConstraints[it] = vertexConstraints + newConstraint }
+            val trueBranchSucc = successors.find { it == method.instList[vertex.trueBranch.index] }
+            trueBranchSucc?.let {
+                pathConstraints.add(it, vertexConstraints and newConstraint)
+            }
 
-            successors
-                .find { it == method.instList[vertex.falseBranch.index] }
-                ?.let { pathConstraints[it] = vertexConstraints + newConstraint.negotiate() }
+            val falseBranchSucc = successors.find { it == method.instList[vertex.falseBranch.index] }
+            falseBranchSucc?.let {
+                pathConstraints.add(it, vertexConstraints and newConstraint.negotiate())
+            }
+
+            // If the path constraints of a successor vertex change,
+            // add it back to the worklist to ensure its successors are updated correctly
+            // (also for successors of a successor etc).
+            visited.remove(trueBranchSucc)
+            visited.remove(falseBranchSucc)
         }
 
         private fun processAssignInst(
             vertex: JcAssignInst,
+            vertexConstraints: Fact?,
             ctx: EqualsCtx
         ) {
             if (vertex.lhv is JcLocalVar) {
                 val localVarName = (vertex.lhv as JcLocalVar).name
                 val handler = handlers[vertex.rhv::class.java]
-                ctx.locationToFact[localVarName] = handler?.handle(vertex.rhv, ctx) ?: Top
+                val vertexFact = handler?.handle(vertex.rhv, ctx, vertexConstraints) ?: Top
+                ctx.locationToFact.add(localVarName, vertexFact, vertexConstraints)
             }
         }
 
         private fun getIfCondition(
             vertex: JcIfInst,
-            ctx: EqualsCtx
-        ): Fact = when (val cond = vertex.condition) {
+            ctx: EqualsCtx,
+            vertexConstraints: Fact?
+        ): Predicate = when (val cond = vertex.condition) {
             is JcEqExpr, is JcNeqExpr -> {
                 val handler = handlers[cond::class.java]
-                handler?.handle(cond, ctx) ?: Top
+                // TODO: log case when non predicate is returned.
+                handler?.handle(cond, ctx, vertexConstraints) as? Predicate ?: Predicate.Top
             }
 
-            else -> Top
+            else -> Predicate.Top
         }
 
         private val handlers = mapOf(

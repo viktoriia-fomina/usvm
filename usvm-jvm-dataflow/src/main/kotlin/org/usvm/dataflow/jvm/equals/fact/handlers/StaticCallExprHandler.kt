@@ -10,7 +10,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.Equals
 import org.usvm.dataflow.jvm.equals.fact.Fact.Top
 
 class StaticCallExprHandler : InstructionHandler {
-    override fun handle(expr: JcExpr, ctx: EqualsCtx): Fact {
+    override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
         val staticCallExpr = expr as JcStaticCallExpr
         val method = staticCallExpr.method
 
@@ -20,8 +20,8 @@ class StaticCallExprHandler : InstructionHandler {
                     method.enclosingType.typeName == "kotlin.jvm.internal.Intrinsics" && method.name == "areEqual")
         ) {
             // TODO: can arg not to be JcLocalVar?
-            val arg0 = ctx.locationToFact[(staticCallExpr.args[0] as JcLocalVar).name] ?: Top
-            val arg1 = ctx.locationToFact[(staticCallExpr.args[1] as JcLocalVar).name] ?: Top
+            val arg0 = ctx.locationToFact.getFact((staticCallExpr.args[0] as JcLocalVar).name, pathConstraintsInCurrentPoint) ?: Top
+            val arg1 = ctx.locationToFact.getFact((staticCallExpr.args[1] as JcLocalVar).name, pathConstraintsInCurrentPoint) ?: Top
 
             // TODO: can be arg0 not a Field?
             if (arg0 is Field && arg1 is Field && arg0.name == arg1.name) {
