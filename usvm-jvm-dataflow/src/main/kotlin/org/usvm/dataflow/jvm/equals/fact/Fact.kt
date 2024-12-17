@@ -1,6 +1,6 @@
 package org.usvm.dataflow.jvm.equals.fact
 
-import org.usvm.dataflow.jvm.equals.fact.Fact.*
+import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate
 
 sealed class Fact {
     data object Top : Fact()
@@ -95,3 +95,16 @@ infix fun Predicate?.and(p: Predicate): Predicate = when {
 }
 
 // TODO: create some function like simplify, e.g., something like TOP or TOP can be simplified to TOP.
+
+fun Fact.isTop(): Boolean = when(this) {
+    is Predicate -> this.isTop()
+    is Fact.Top -> true
+    else -> false
+}
+
+fun Predicate.isTop(): Boolean = when (this) {
+    is Predicate.Top -> true
+    is Predicate.And -> this.predicates.any { it.isTop() }
+    is Predicate.Or -> this.predicates.any { it.isTop() }
+    else -> false
+}

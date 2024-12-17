@@ -20,6 +20,11 @@ class FieldRefHandler : InstructionHandler {
             else -> Top
         }
         // TODO: don't do such not really safe casting.
-        return if (instanceFact == Top) Top else Field(instanceFact as ThisOrOther, field.name)
+        return when (instanceFact) {
+            Top -> Top
+            // TODO: why INSTANCE can be a field? Think about it
+            is Field -> instanceFact
+            else -> Field(instanceFact as ThisOrOther, field.name)
+        }
     }
 }

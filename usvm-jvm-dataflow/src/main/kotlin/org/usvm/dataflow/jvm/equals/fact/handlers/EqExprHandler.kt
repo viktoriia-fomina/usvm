@@ -10,6 +10,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.Equals.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.IsNull
 import org.usvm.dataflow.jvm.equals.fact.utils.negotiate
 import org.usvm.dataflow.jvm.equals.fact.utils.toFact
+import org.usvm.dataflow.jvm.equals.fact.utils.toPredicate
 
 // TODO: mostly copy-pasted from NeqExprHandler so get rid of copy pasting.
 class EqExprHandler : InstructionHandler {
@@ -33,7 +34,7 @@ class EqExprHandler : InstructionHandler {
         if (rhvFact is Predicate.True) {
             return lhvFact
         } else if (rhvFact is Predicate.False) {
-            return (lhvFact as Predicate).negotiate()
+            return lhvFact.toPredicate()?.negotiate() ?: Top
         } else if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
             lhvFact is ThisOrOther.Other && rhvFact is ThisOrOther.This
         ) {

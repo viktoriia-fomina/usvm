@@ -9,6 +9,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.*
 import org.usvm.dataflow.jvm.equals.fact.handlers.*
 import org.usvm.dataflow.jvm.equals.fact.utils.isStructural
 import org.usvm.dataflow.jvm.equals.fact.utils.negotiate
+import org.usvm.dataflow.jvm.equals.fact.utils.toPredicate
 import org.usvm.dataflow.jvm.util.thisInstance
 
 class EqualsProcessor {
@@ -52,6 +53,42 @@ class EqualsProcessor {
                             }
 
                             else -> false
+                        }
+                    }
+                }
+            }
+
+            return res
+        }
+
+        fun hasTop(cp: JcClasspath, equalsMethod: JcMethod): Boolean {
+            val equalsMethodInsts = equalsMethod.instList
+            val (locationToFact, returnToPathConstraints) = collectFacts(cp, equalsMethod) // TODO: process empty map
+            //println(locationToFact)
+
+            val returnInsts = equalsMethodInsts.filterIsInstance<JcReturnInst>()
+            val res = returnInsts.any { returnInst ->
+                val returnValue = returnInst.returnValue
+                val pathConstraints = returnToPathConstraints.get(returnInst)
+
+                when (returnValue) {
+                    is JcLocalVar -> {
+                        val fact = locationToFact.getFact(returnValue.name, pathConstraints)
+                        // TODO: log it, error case when fact == null.
+                        // TODO: I don't like it at all, these 2 TOPs.
+                        fact == null || fact.isTop()
+                    }
+
+                    null -> pathConstraints?.isTop() ?: false
+                    else -> {
+                        when (returnValue) {
+                            is JcInt -> when (returnValue.value) {
+                                0 -> pathConstraints?.negotiate()?.isTop() ?: false
+                                1 -> pathConstraints?.isTop() ?: false
+                                else -> true
+                            }
+
+                            else -> true
                         }
                     }
                 }
@@ -167,7 +204,7 @@ class EqualsProcessor {
             is JcEqExpr, is JcNeqExpr -> {
                 val handler = handlers[cond::class.java]
                 // TODO: log case when non predicate is returned!!!
-                handler?.handle(cond, ctx, vertexConstraints) as? Predicate ?: Predicate.Top
+                handler?.handle(cond, ctx, vertexConstraints)?.toPredicate() ?: Predicate.Top
             }
 
             else -> Predicate.Top

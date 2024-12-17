@@ -16,7 +16,9 @@ class EqualsTest : BaseAnalysisTest() {
         val personClass = cp.findClassOrNull("equals.Person")
         assertTrue(personClass !is JcUnknownClass) { "Person class is not loaded correctly" }
         // TODO: process correctly overrides.
-        val equalsMethod = personClass?.methods?.find { it.name == "equals" }
+        val equalsMethod = personClass?.methods?.find {
+            it.name == "equals" && it.parameters.size == 1 && it.parameters.first().type.typeName == "java.lang.Object"
+        }
         assertNotNull(equalsMethod)
         assertTrue(EqualsProcessor.isEqualsStructural(cp, equalsMethod))
     }

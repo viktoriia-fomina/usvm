@@ -57,3 +57,9 @@ fun Fact.isStructural(): Boolean {
         else -> false
     }
 }
+
+fun Fact.toPredicate(): Predicate? = when (this) {
+    is Predicate -> this
+    is Fact.Top -> Predicate.Top
+    else -> null
+}

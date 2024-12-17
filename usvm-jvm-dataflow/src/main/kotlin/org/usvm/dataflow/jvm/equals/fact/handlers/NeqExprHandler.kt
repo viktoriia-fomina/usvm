@@ -9,6 +9,7 @@ import org.usvm.dataflow.jvm.equals.fact.Fact.*
 import org.usvm.dataflow.jvm.equals.fact.Fact.Predicate.*
 import org.usvm.dataflow.jvm.equals.fact.utils.negotiate
 import org.usvm.dataflow.jvm.equals.fact.utils.toFact
+import org.usvm.dataflow.jvm.equals.fact.utils.toPredicate
 
 class NeqExprHandler : InstructionHandler {
     override fun handle(expr: JcExpr, ctx: EqualsCtx, pathConstraintsInCurrentPoint: Fact?): Fact {
@@ -30,7 +31,7 @@ class NeqExprHandler : InstructionHandler {
 
         // TODO: there can be reassignment with casts.
         if (rhvFact is True) {
-            return (lhvFact as Predicate).negotiate()
+            return lhvFact.toPredicate()?.negotiate() ?: Fact.Top
         } else if (rhvFact is False) {
             return lhvFact
         } else if (lhvFact is ThisOrOther.This && rhvFact is ThisOrOther.Other ||
